@@ -31,5 +31,11 @@
     "OMP_NUM_THREADS": null,
     "OPENBLAS_NUM_THREADS": null,
     "MKL_NUM_THREADS": null
-  }
+  },
+  "packages": {
+    "numpy": "1.26.4",
+    "matplotlib": "3.10.9",
+    "pytest": "9.0.3"
+  },
+  "budget_rounding": "ceil(target * total_weights): at least requested sparsity"
 }

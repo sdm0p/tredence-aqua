@@ -35,6 +35,9 @@ def main():
                             timings.append(dict(method=method,seed=seed,path=name,repeat=repeat,batch=len(tx),milliseconds=ms,weight_macs=len(tx)*(total if name=='dense' else active)))
     write_csv(out/'sweep.csv',rows);write_csv(out/'history.csv',histories);write_csv(out/'timings.csv',timings)
     metadata=dict(python=platform.python_version(),numpy=np.__version__,platform=platform.platform(),processor=platform.processor(),epochs=80,data_seeds=dict(train=7,validation=8,test=9),sizes=[900,450,900],architecture=[2,32,32,3],lr=.002,ema=.9,seeds=[0,1,2],threads={k:os.environ.get(k) for k in ['OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS']})
+    from importlib.metadata import version
+    metadata['packages']={name:version(name) for name in ['numpy','matplotlib','pytest']}
+    metadata['budget_rounding']='ceil(target * total_weights): at least requested sparsity'
     (out/'environment.json').write_text(json.dumps(metadata,indent=2))
     plt.figure()
     for method in ['magnitude','saliency']:

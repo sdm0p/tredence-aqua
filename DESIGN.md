@@ -26,7 +26,7 @@ Magnitude uses |w| with the same architecture, seeds and training schedule. Sali
 
 ## Budget and schedule
 
-20% dense warm-up, cubic ramp until 70%, then fixed-mask recovery. For progress clipped to [0,1], s=target*(1-(1-progress)^3). Global stable ranking removes exactly floor(s*total_weights), never implicitly reviving masked edges. Integer achieved sparsity can be slightly below the requested fraction. Biases are excluded. Layer disconnection is allowed and disclosed.
+20% dense warm-up, cubic ramp until 70%, then fixed-mask recovery. For progress clipped to [0,1], s=target*(1-(1-progress)^3). Global stable ranking removes exactly ceil(s*total_weights), never implicitly reviving masked edges. Integer achieved sparsity is at least the requested fraction and overshoots by less than one connection's fraction. Biases are excluded. Layer disconnection is allowed and disclosed.
 
 ## Measurement and scaling
 

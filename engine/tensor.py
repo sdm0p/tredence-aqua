@@ -1,77 +1,165 @@
+"""Float64 reverse-mode autodiff with broadcast-safe vector-Jacobian products."""
 import numpy as np
 
-def _unbroadcast(g, shape):
-    while g.ndim > len(shape): g = g.sum(axis=0)
-    for i,s in enumerate(shape):
-        if s == 1 and g.shape[i] != 1: g = g.sum(axis=i, keepdims=True)
-    return g.reshape(shape)
+
+def _unbroadcast(gradient, shape):
+    while gradient.ndim > len(shape):
+        gradient = gradient.sum(axis=0)
+    for axis, size in enumerate(shape):
+        if size == 1 and gradient.shape[axis] != 1:
+            gradient = gradient.sum(axis=axis, keepdims=True)
+    return gradient.reshape(shape)
+
 
 class Tensor:
-    def __init__(self, data, requires_grad=False, _children=(), _op=''):
-        self.data=np.asarray(data,dtype=np.float64); self.requires_grad=requires_grad; self.grad=None
-        self._prev=set(_children); self._backward=lambda:None; self._op=_op
-    def __add__(self,o): return self._bin(o,lambda a,b:a+b,lambda g,a,b:(g,g))
-    def __radd__(self,o): return self+o
-    def __sub__(self,o): return self._bin(o,lambda a,b:a-b,lambda g,a,b:(g,-g))
-    def __rsub__(self,o): return Tensor(o)-self
-    def __mul__(self,o): return self._bin(o,lambda a,b:a*b,lambda g,a,b:(g*b,g*a))
-    def __rmul__(self,o): return self*o
-    def __truediv__(self,o): return self._bin(o,lambda a,b:a/b,lambda g,a,b:(g/b,-g*a/(b*b)))
-    def __neg__(self): return self*-1
-    def _bin(self,o,fn,der):
-        o=o if isinstance(o,Tensor) else Tensor(o); out=Tensor(fn(self.data,o.data),self.requires_grad or o.requires_grad,(self,o))
-        def bw():
-            ga,gb=der(out.grad,self.data,o.data)
-            if self.requires_grad:self._add_grad(_unbroadcast(ga,self.data.shape))
-            if o.requires_grad:o._add_grad(_unbroadcast(gb,o.data.shape))
-        out._backward=bw; return out
-    def __matmul__(self,o):
-        o=o if isinstance(o,Tensor) else Tensor(o)
-        if self.data.ndim!=2 or o.data.ndim!=2:raise ValueError('matmul requires 2D operands')
-        out=Tensor(self.data@o.data,self.requires_grad or o.requires_grad,(self,o))
-        def bw():
-            if self.requires_grad:self._add_grad(out.grad@np.swapaxes(o.data,-1,-2))
-            if o.requires_grad: o._add_grad(np.swapaxes(self.data,-1,-2)@out.grad)
-        out._backward=bw; return out
-    def sum(self,axis=None,keepdims=False):
-        out=Tensor(self.data.sum(axis=axis,keepdims=keepdims),self.requires_grad,(self,))
-        def bw():
-            g=out.grad
+    def __init__(self, data, requires_grad=False, _children=(), _op=""):
+        self.data = np.asarray(data, dtype=np.float64)
+        self.requires_grad = requires_grad
+        self.grad = None
+        self._prev = set(_children)
+        self._backward = lambda: None
+        self._op = _op
+
+    def __add__(self, other):
+        return self._bin(other, lambda a,b: a+b, lambda g,a,b: (g,g))
+
+    def __radd__(self, other):
+        return self + other
+
+    def __sub__(self, other):
+        return self._bin(other, lambda a,b: a-b, lambda g,a,b: (g,-g))
+
+    def __rsub__(self, other):
+        return Tensor(other) - self
+
+    def __mul__(self, other):
+        return self._bin(other, lambda a,b: a*b, lambda g,a,b: (g*b,g*a))
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __truediv__(self, other):
+        return self._bin(other, lambda a,b: a/b, lambda g,a,b: (g/b,-g*a/(b*b)))
+
+    def __neg__(self):
+        return self * -1
+
+    def _bin(self, other, forward, derivatives):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        out = Tensor(forward(self.data, other.data),
+                     self.requires_grad or other.requires_grad, (self, other))
+
+        def backward():
+            left, right = derivatives(out.grad, self.data, other.data)
+            if self.requires_grad:
+                self._add_grad(_unbroadcast(left, self.data.shape))
+            if other.requires_grad:
+                other._add_grad(_unbroadcast(right, other.data.shape))
+        out._backward = backward
+        return out
+
+    def __matmul__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        if self.data.ndim != 2 or other.data.ndim != 2:
+            raise ValueError("matmul requires 2D operands")
+        out = Tensor(self.data @ other.data,
+                     self.requires_grad or other.requires_grad, (self, other))
+
+        def backward():
+            if self.requires_grad:
+                self._add_grad(out.grad @ other.data.T)
+            if other.requires_grad:
+                other._add_grad(self.data.T @ out.grad)
+        out._backward = backward
+        return out
+
+    def sum(self, axis=None, keepdims=False):
+        out = Tensor(self.data.sum(axis=axis, keepdims=keepdims),
+                     self.requires_grad, (self,))
+
+        def backward():
+            gradient = out.grad
             if axis is not None and not keepdims:
-                axes=(axis,) if isinstance(axis,int) else tuple(axis)
-                for a in sorted([x if x>=0 else x+self.data.ndim for x in axes]):g=np.expand_dims(g,a)
-            if self.requires_grad:self._add_grad(np.ones_like(self.data)*g)
-        out._backward=bw; return out
-    def mean(self,axis=None,keepdims=False): return self.sum(axis,keepdims)/self.data.size if axis is None else self.sum(axis,keepdims)/np.prod(np.asarray(self.data.shape)[list((axis,) if isinstance(axis,int) else axis)])
+                axes = (axis,) if isinstance(axis, int) else tuple(axis)
+                normalized = sorted(a % self.data.ndim for a in axes)
+                for reduction_axis in normalized:
+                    gradient = np.expand_dims(gradient, reduction_axis)
+            if self.requires_grad:
+                self._add_grad(np.ones_like(self.data) * gradient)
+        out._backward = backward
+        return out
+
+    def mean(self, axis=None, keepdims=False):
+        if axis is None:
+            count = self.data.size
+        else:
+            axes = (axis,) if isinstance(axis, int) else axis
+            count = np.prod([self.data.shape[a] for a in axes])
+        return self.sum(axis, keepdims) / count
+
     def relu(self):
-        out=Tensor(np.maximum(self.data,0),self.requires_grad,(self,)); out._backward=lambda:self._add_grad(out.grad*(self.data>0)) if self.requires_grad else None; return out
+        out = Tensor(np.maximum(self.data, 0), self.requires_grad, (self,))
+        def backward():
+            if self.requires_grad:
+                self._add_grad(out.grad * (self.data > 0))
+        out._backward = backward
+        return out
+
     def tanh(self):
-        out=Tensor(np.tanh(self.data),self.requires_grad,(self,)); out._backward=lambda:self._add_grad(out.grad*(1-out.data*out.data)) if self.requires_grad else None; return out
-    def _add_grad(self,g): self.grad=g if self.grad is None else self.grad+g
-    def backward(self,grad=None):
-        topo=[]; seen=set()
-        def build(v):
-            if v not in seen:
-                seen.add(v)
-                for x in v._prev:build(x)
-                topo.append(v)
-        build(self)
+        out = Tensor(np.tanh(self.data), self.requires_grad, (self,))
+        def backward():
+            if self.requires_grad:
+                self._add_grad(out.grad * (1 - out.data**2))
+        out._backward = backward
+        return out
+
+    def _add_grad(self, gradient):
+        self.grad = gradient if self.grad is None else self.grad + gradient
+
+    def backward(self, grad=None):
+        seed = np.ones_like(self.data) if grad is None else np.asarray(grad, dtype=np.float64)
+        if seed.shape != self.data.shape:
+            raise ValueError("seed shape mismatch")
+        topology, visited = [], set()
+
+        def visit(node):
+            if node in visited:
+                return
+            visited.add(node)
+            for parent in node._prev:
+                visit(parent)
+            topology.append(node)
+        visit(self)
+
         if not self._prev:
-            seed=np.ones_like(self.data) if grad is None else np.asarray(grad,dtype=np.float64)
-            if seed.shape!=self.data.shape:raise ValueError('seed shape mismatch')
             self._add_grad(seed)
             return
-        for v in topo:
-            if v._prev: v.grad=None
-        self.grad=np.ones_like(self.data) if grad is None else np.asarray(grad,dtype=np.float64)
-        if self.grad.shape != self.data.shape: raise ValueError('seed shape mismatch')
-        for v in reversed(topo): v._backward()
+        # Preserve accumulated leaf gradients, but discard old intermediate values.
+        for node in topology:
+            if node._prev:
+                node.grad = None
+        self.grad = seed
+        for node in reversed(topology):
+            node._backward()
+
 
 def cross_entropy(logits, labels):
-    z=logits.data; y=np.asarray(labels)
-    if z.ndim!=2 or len(z)==0 or y.shape!=(len(z),) or not np.issubdtype(y.dtype,np.integer) or np.any(y<0) or np.any(y>=z.shape[1]): raise ValueError('invalid logits or labels')
-    shifted=z-z.max(1,keepdims=True); e=np.exp(shifted); p=e/e.sum(1,keepdims=True); loss=(np.log(e.sum(1))-shifted[np.arange(len(y)),y]).mean(); out=Tensor(loss,logits.requires_grad,(logits,))
-    def bw():
+    values, labels = logits.data, np.asarray(labels)
+    if (values.ndim != 2 or len(values) == 0 or labels.shape != (len(values),)
+            or not np.issubdtype(labels.dtype, np.integer)
+            or np.any(labels < 0) or np.any(labels >= values.shape[1])):
+        raise ValueError("invalid logits or labels")
+    shifted = values - values.max(axis=1, keepdims=True)
+    exponentials = np.exp(shifted)
+    probabilities = exponentials / exponentials.sum(axis=1, keepdims=True)
+    rows = np.arange(len(labels))
+    loss = (np.log(exponentials.sum(axis=1)) - shifted[rows, labels]).mean()
+    out = Tensor(loss, logits.requires_grad, (logits,))
+
+    def backward():
         if logits.requires_grad:
-            g=p.copy();g[np.arange(len(y)),y]-=1;logits._add_grad(g/len(y)*out.grad)
-    out._backward=bw;return out
+            gradient = probabilities.copy()
+            gradient[rows, labels] -= 1
+            logits._add_grad(gradient / len(labels) * out.grad)
+    out._backward = backward
+    return out

@@ -6,7 +6,7 @@ Python/NumPy reverse-mode autodiff, MLP, Adam, gradual pruning and sparse-aware 
 
 ## Install and run
 
-From the repository root with Python 3.10+:
+From the repository root with Python 3.12 (tested: 3.12.2). Dependencies are pinned to the versions used for the committed evidence:
 
 ```sh
 python -m pip install -r requirements.txt
@@ -31,8 +31,8 @@ Read [RESULTS.md](RESULTS.md) for actual measurements and [DESIGN.md](DESIGN.md)
 
 ## Evidence and limits
 
-Test accuracy uses separate data (seed 9), validation uses seed 8, training uses seed 7. Three paired seeds control initialization/order. Test data selects no checkpoints or hyperparameters. Weight sparsity excludes 67 dense biases. Integer budgets remove floor(target * 1184) connections.
+Test accuracy uses separate data (seed 9), validation uses seed 8, training uses seed 7. Three paired seeds control initialization/order. Test data selects no checkpoints or hyperparameters. Weight sparsity excludes 67 dense biases. Integer budgets remove ceil(target * 1184) connections, enforcing at least the requested sparsity.
 
 Training is dense masked NumPy math. Exported inference visits active edges only; the dense benchmark also avoids autograd. Arithmetic savings do not guarantee latency savings. Synthetic data and three seeds do not establish production quality or statistical superiority. Automatic regrowth is not implemented; explicit revival is tested.
 
-The original repository retains its history. This new repository records the staged migration, additional tests and a direct-leaf backward fix found during verification. AI assistance is disclosed in AI_USAGE.md.
+The GitHub repository was deleted and recreated by the user. Its published history records this staged rebuild, not the earlier development. Earlier source history remains available locally on a backup branch. AI assistance is disclosed in AI_USAGE.md.
