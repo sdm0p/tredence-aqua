@@ -1,0 +1,35 @@
+{
+  "python": "3.12.2",
+  "numpy": "1.26.4",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "processor": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+  "epochs": 80,
+  "data_seeds": {
+    "train": 7,
+    "validation": 8,
+    "test": 9
+  },
+  "sizes": [
+    900,
+    450,
+    900
+  ],
+  "architecture": [
+    2,
+    32,
+    32,
+    3
+  ],
+  "lr": 0.002,
+  "ema": 0.9,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "threads": {
+    "OMP_NUM_THREADS": null,
+    "OPENBLAS_NUM_THREADS": null,
+    "MKL_NUM_THREADS": null
+  }
+}
