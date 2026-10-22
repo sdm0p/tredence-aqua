@@ -37,3 +37,13 @@ def test_cross_entropy_finite_differences():
         old=a[idx];a[idx]=old+1e-6;hi=cross_entropy(Tensor(a),[1,0]).data
         a[idx]=old-1e-6;lo=cross_entropy(Tensor(a),[1,0]).data;a[idx]=old
         assert np.allclose(x.grad[idx],(hi-lo)/2e-6,atol=1e-6)
+
+def test_leaf_root_accumulates_and_seed_shape_is_checked():
+    x=Tensor([2.],True);x.backward();x.backward()
+    assert np.allclose(x.grad,[2])
+    with pytest.raises(ValueError):x.backward([1.,2.])
+
+def test_multiaxis_broadcast_gradient():
+    x=Tensor(np.ones((2,3,4)),True);bias=Tensor(np.ones((1,3,1)),True)
+    ((x+bias)*2).sum().backward()
+    assert np.allclose(bias.grad,np.full((1,3,1),16))

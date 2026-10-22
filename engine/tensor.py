@@ -56,6 +56,11 @@ class Tensor:
                 for x in v._prev:build(x)
                 topo.append(v)
         build(self)
+        if not self._prev:
+            seed=np.ones_like(self.data) if grad is None else np.asarray(grad,dtype=np.float64)
+            if seed.shape!=self.data.shape:raise ValueError('seed shape mismatch')
+            self._add_grad(seed)
+            return
         for v in topo:
             if v._prev: v.grad=None
         self.grad=np.ones_like(self.data) if grad is None else np.asarray(grad,dtype=np.float64)
