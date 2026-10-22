@@ -21,4 +21,4 @@ Planned verified stages:
 - Additional direct-leaf backward fix and broadcast check: 31 tests passed.
 - Fresh evaluation: all 30 paired held-out runs completed; raw results and plots regenerated here.
 
-This rebuild will replace the contents of the existing sdm0p/tredence-aqua repository through a merge preserving both histories, at the user's request. No forced history replacement is required.
+The user recreated sdm0p/tredence-aqua as an empty repository. Only this rebuild's staged history is published on main. The abandoned local integration attempt is retained on a local backup branch and is not published. The source commit above identifies the earlier implementation; that earlier history is not included in this recreated remote.
